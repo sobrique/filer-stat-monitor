@@ -1,0 +1,85 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+use LWP::UserAgent;
+use Data::Dumper;
+use XML::Twig;
+use Parallel::ForkManager;
+
+use FindBin;
+use lib $FindBin::RealBin;
+use Defs;
+use GlobalConfig;
+
+my $debug = 0;
+
+my @host_list = @ARGV ? @ARGV : @Defs::host_list;
+
+my $api -req = 'perf-object-get-instances';
+my $API = 'servlets/netapp.servlets.admin.XMLrequest_filer';
+
+my $manager = Parallel::ForkManager->new($Defs::max_concurrent);
+
+foreach my $filer (@host_list) {
+    $manager->start and next;
+    $0 = "$0 $filer";
+    my $agent = LWP::UserAgent->new(
+        'ssl_opts' => {
+            'verify_hostname' => 0,
+            'SSL_Version'     => 'SSLv3'
+        },
+    );
+    my $url = "${GlobalConfig::protocol}://${filer}/${API}";
+    foreach my $metric_set ( keys %{$Defs::things_to_fetch} ) {
+        my $xml_twig = XML::Twig->new( ' pretty_print ' => ' indented ' );
+        $xml_twig->set_root(
+            XML::Twig::Elt->new(
+                'netapp',
+                {   version => '1.7',
+                    xmlns   => 'http://www.netapp.com/filer/admin'
+                }
+            )
+        );
+        my $req = $xml_twig->root->insert_new_elt($api_req);
+        foreach
+            my $objectname ( keys %{ $Defs::things_to_fetch->{$metric_set} } )
+        {
+            $req->insert_new_elt( 'objectname', $objectname );
+            my $counters = $req->insert_new_elt( 'last_child', 'counters' );
+            foreach my $counter (
+                @{ $Defs::things_to_fetch->{$metric_set}->{$object_name} } )
+            {
+                $counters->insert_new_elt( 'counter', $counter );
+            }
+        }
+        $xml_twig->set_doctype('netapp SYSTEM "file://etc/netapp_filer.dtd"');
+        $xml_twig->set_xml_version('1.0');
+        $xml_twig->set_encoding('utf- 8');
+
+        if ($debug) { $xml_twig->print; }
+
+        my $request = HTTP::Request->new( POST => $url );
+        $request->content( $xml_twig->sprint );
+        $request->authorization_basic( Defs::username_for($filer),
+            Defs::passwd_for($filer) );
+
+        my $results = $agent->request($request);
+        unless ( $results->is_success ) {
+            print $results ->status_line;
+            print Dumper \$results;
+            next;
+        }
+
+        my $twig = XML::Twig->new( 'pretty_print' => 'indented' );
+        $twig->parse( $results->content );
+        open( my $output_fh,
+            ">", "$Defs::xml_dir/" . time() . ".$filer.$metric_set.xml" )
+            or warn $!;
+        print {$output_fh} $twig->sprint;
+        close($output_fh);
+    }
+    $manager->finish;
+}
+$manager->wait_all_children;
