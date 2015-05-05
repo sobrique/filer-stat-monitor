@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE netapp SYSTEM "/na_admin/netapp_filer.dtd">
+<netapp version="1.1" xmlns="http://www.netapp.com/filer/admin">
+    <results status="passed"> 
+    <timestamp>1430831522</timestamp>
+    <instances>
+        <instance-data>
+            <name>wafl</name>
+            <counters>
+                <counter-data>
+                    <name>cp_count</name>
+                    <value>13786,11222,0,0,0,0,88212,0,0,0,0</value>
+                </counter-data>
+                <counter-data>
+                    <name>read_io_type</name>
+                    <value>38311351,0,856587</value>
+                </counter-data>
+            </counters>
+        </instance-data>
+    </instances>
+</results>
+</netapp>
